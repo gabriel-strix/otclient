@@ -33,8 +33,10 @@ class Connection final : public LuaObject
 
     enum
     {
-        READ_TIMEOUT = 30,
-        WRITE_TIMEOUT = 30,
+        // Zanera/7.70: o servidor CipSoft pode ficar >30s sem mandar nada pra um
+        // cliente parado. 30s dava "connection lost (ERROR 10060)" no meio do jogo.
+        READ_TIMEOUT = 120,
+        WRITE_TIMEOUT = 120,
         SEND_BUFFER_SIZE = 65536,
         RECV_BUFFER_SIZE = 65536
     };

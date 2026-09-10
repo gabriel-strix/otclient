@@ -254,6 +254,10 @@ void Connection::onConnect(const std::error_code& error)
         const asio::ip::tcp::no_delay option(true);
         m_socket.set_option(option);
 
+        // Zanera: keepalive TCP — mantem o mapeamento NAT vivo e derruba conexoes
+        // mortas de verdade em vez de pendurar ate o READ_TIMEOUT.
+        m_socket.set_option(asio::socket_base::keep_alive(true));
+
         if (m_connectCallback)
             m_connectCallback();
     } else
