@@ -1,0 +1,78 @@
+name: Zanera Windows build
+
+# Build manual: Actions -> "Zanera Windows build" -> Run workflow
+on:
+  workflow_dispatch:
+  push:
+    branches: [zanera-770]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2025
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Export GitHub Actions cache env (vcpkg x-gha)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: MSVC dev environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Read vcpkg baseline
+        id: vcpkg
+        shell: pwsh
+        run: |
+          $b = (Get-Content vcpkg.json -Raw | ConvertFrom-Json).'builtin-baseline'
+          "commit=$b" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitURL: "https://github.com/microsoft/vcpkg.git"
+          vcpkgGitCommitId: ${{ steps.vcpkg.outputs.commit }}
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -B build -G Ninja -S . `
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            -DVCPKG_HOST_TRIPLET=x64-windows-static `
+            -DBUILD_STATIC_LIBRARY=ON `
+            -DTOGGLE_BIN_FOLDER=ON `
+            -DOPTIONS_ENABLE_IPO=OFF `
+            -DOPTIONS_ENABLE_SCCACHE=OFF `
+            -DOTCLIENT_BUILD_TESTS=OFF
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --target otclient --config RelWithDebInfo
+
+      - name: Collect
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          $exe = Get-ChildItem -Path build -Recurse -Filter otclient.exe | Select-Object -First 1
+          if (-not $exe) { throw "otclient.exe nao encontrado" }
+          Copy-Item $exe.FullName out/otclient.exe
+          & $exe.FullName --version 2>&1 | Out-Host
+
+      - name: Upload otclient.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: otclient-windows-zanera-770
+          path: out/otclient.exe
+          if-no-files-found: error

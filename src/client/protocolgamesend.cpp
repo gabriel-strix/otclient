@@ -52,8 +52,14 @@ void ProtocolGame::sendLoginPacket(const uint32_t challengeTimestamp, const uint
     const auto& msg = std::make_shared<OutputMessage>();
 
     msg->addU8(Proto::ClientPendingGame);
-    msg->addU16(g_game.getOs());
-    msg->addU16(g_game.getProtocolVersion());
+
+    // Zanera/RealOTS 7.70: o binario CipSoft espera SO o opcode fora do bloco RSA;
+    // TerminalType/TerminalVersion vao DENTRO do RSA, apos as chaves XTEA.
+    const bool cipOldGameLogin = g_game.getClientVersion() <= 772;
+    if (!cipOldGameLogin) {
+        msg->addU16(g_game.getOs());
+        msg->addU16(g_game.getProtocolVersion());
+    }
 
     if (g_game.getFeature(Otc::GameClientVersion))
         msg->addU32(g_game.getClientVersion());
@@ -82,6 +88,11 @@ void ProtocolGame::sendLoginPacket(const uint32_t challengeTimestamp, const uint
         msg->addU32(m_xteaKey[1]);
         msg->addU32(m_xteaKey[2]);
         msg->addU32(m_xteaKey[3]);
+    }
+
+    if (cipOldGameLogin) {
+        msg->addU16(0);                            // TerminalType (0=Windows)
+        msg->addU16(g_game.getProtocolVersion());  // TerminalVersion (>= 770)
     }
 
     msg->addU8(0); // is gm set?
