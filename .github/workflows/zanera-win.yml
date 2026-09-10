@@ -24,10 +24,11 @@ jobs:
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
-      - name: MSVC dev environment
+      - name: MSVC dev environment (x64)
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
+          vsversion: 2026
 
       - name: Read vcpkg baseline
         id: vcpkg
@@ -42,23 +43,15 @@ jobs:
           vcpkgGitURL: "https://github.com/microsoft/vcpkg.git"
           vcpkgGitCommitId: ${{ steps.vcpkg.outputs.commit }}
 
-      - name: Configure
-        shell: pwsh
-        run: |
-          cmake -B build -G Ninja -S . `
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
-            -DVCPKG_HOST_TRIPLET=x64-windows-static `
-            -DBUILD_STATIC_LIBRARY=ON `
-            -DTOGGLE_BIN_FOLDER=ON `
-            -DOPTIONS_ENABLE_IPO=OFF `
-            -DOPTIONS_ENABLE_SCCACHE=OFF `
-            -DOTCLIENT_BUILD_TESTS=OFF
-
-      - name: Build
-        shell: pwsh
-        run: cmake --build build --target otclient --config RelWithDebInfo
+      # Mesma config que o release oficial (reusable-build-windows.yml): preset
+      # windows-release. Build raw dava exe que nao salvava config.otml no exit.
+      - name: Configure + Build (preset windows-release)
+        uses: lukka/run-cmake@v10
+        with:
+          configurePreset: windows-release
+          buildPreset: windows-release
+          configurePresetAdditionalArgs: "['-DTOGGLE_BIN_FOLDER=ON', '-DOPTIONS_ENABLE_IPO=OFF', '-DOTCLIENT_BUILD_TESTS=OFF', '-DOPTIONS_ENABLE_SCCACHE=OFF']"
+          buildPresetAdditionalArgs: "['--target', 'otclient']"
 
       - name: Locate otclient.exe
         id: exe
