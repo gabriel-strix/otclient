@@ -1,6 +1,5 @@
 name: Zanera Windows build
 
-# Build manual: Actions -> "Zanera Windows build" -> Run workflow
 on:
   workflow_dispatch:
   push:
@@ -61,14 +60,16 @@ jobs:
         shell: pwsh
         run: cmake --build build --target otclient --config RelWithDebInfo
 
-      - name: Collect
+      - name: Locate otclient.exe
+        id: exe
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path out | Out-Null
           $exe = Get-ChildItem -Path build -Recurse -Filter otclient.exe | Select-Object -First 1
-          if (-not $exe) { throw "otclient.exe nao encontrado" }
-          Copy-Item $exe.FullName out/otclient.exe
-          & $exe.FullName --version 2>&1 | Out-Host
+          if (-not $exe) { Get-ChildItem -Path build -Recurse -Filter *.exe | ForEach-Object { Write-Host $_.FullName }; throw "otclient.exe nao encontrado" }
+          Write-Host "encontrado: $($exe.FullName)  ($([math]::Round($exe.Length/1MB,1)) MB)"
+          New-Item -ItemType Directory -Force -Path out | Out-Null
+          Copy-Item $exe.FullName out/otclient.exe -Force
+          "dir=$($exe.DirectoryName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Upload otclient.exe
         uses: actions/upload-artifact@v4
@@ -76,3 +77,10 @@ jobs:
           name: otclient-windows-zanera-770
           path: out/otclient.exe
           if-no-files-found: error
+
+      - name: Upload full bin/ (fallback)
+        uses: actions/upload-artifact@v4
+        with:
+          name: otclient-windows-zanera-770-bindir
+          path: ${{ steps.exe.outputs.dir }}/
+          if-no-files-found: warn
